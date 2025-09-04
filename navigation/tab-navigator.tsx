@@ -2,28 +2,30 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { HeaderButton } from '../components/HeaderButton';
 import { TabBarIcon } from '../components/TabBarIcon';
 import One from '../screens/one';
-import Two from '../screens/two';
+import ConfiguracoesScreen from '../screens/configuracoes';
 
 const Tab = createBottomTabNavigator({
   screenOptions: function ScreenOptions() {
     return {
-      tabBarActiveTintColor: 'black',
+      tabBarActiveTintColor: '#6366f1',
+      tabBarInactiveTintColor: '#6b7280',
     };
   },
   screens: {
-    One: {
+    Home: {
       screen: One,
+
       options: ({ navigation }) => ({
-        title: 'Tab One',
-        tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
+        title: 'Home',
+        tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
         headerRight: () => <HeaderButton onPress={() => navigation.navigate('Modal')} />,
       }),
     },
-    Two: {
-      screen: Two,
+    Configuracoes: {
+      screen: ConfiguracoesScreen,
       options: {
-        title: 'Tab Two',
-        tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
+        title: 'Configurações',
+        tabBarIcon: ({ color }) => <TabBarIcon name="cog" color={color} />,
       },
     },
   },
