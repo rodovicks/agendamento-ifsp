@@ -1,7 +1,16 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Image, TextInput } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Alert, Text, TouchableOpacity, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { Container } from '../components/Container';
 import { useAuthStore } from '../store/authStore';
 
@@ -52,7 +61,7 @@ export default function ConfiguracoesScreen() {
       const response = await fetch(file.uri);
       const blob = await response.blob();
       const fileName = `logo_${Date.now()}.jpg`;
-      const { data, error } = await import('../utils/supabase').then((m) =>
+      const { error } = await import('../utils/supabase').then((m) =>
         m.supabase.storage.from('logos').upload(fileName, blob, {
           contentType: 'image/jpeg',
           upsert: true,
@@ -64,6 +73,7 @@ export default function ConfiguracoesScreen() {
       );
       return url;
     } catch (err) {
+      console.error(err);
       Alert.alert('Erro', 'Falha ao fazer upload da logo');
       return null;
     }
@@ -85,11 +95,24 @@ export default function ConfiguracoesScreen() {
           logo: logoUrl,
         })
       );
+      await import('../utils/supabase').then((m) =>
+        m.supabase.auth.updateUser({
+          data: {
+            nome: form.nome.trim(),
+            telefone: form.telefone.trim(),
+            endereco: form.endereco.trim(),
+            ramo: form.ramo.trim(),
+            logo: logoUrl,
+          },
+        })
+      );
+      setForm((f) => ({ ...f, logo: logoUrl }));
       await loadEstabelecimento();
       setEditMode(false);
       setLogoFile(null);
       Alert.alert('Sucesso', 'Perfil atualizado com sucesso!');
     } catch (err) {
+      console.error(err);
       Alert.alert('Erro', 'Falha ao atualizar perfil');
     } finally {
       setLoading(false);
@@ -161,7 +184,7 @@ export default function ConfiguracoesScreen() {
     <View className="mb-4">
       <Text className="mb-1 text-sm font-medium text-gray-700">{label}</Text>
       <TextInput
-        className="rounded-xl border border-gray-300 bg-white px-4 py-3 text-base text-gray-900"
+        className="rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 text-base text-gray-900"
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
@@ -171,9 +194,20 @@ export default function ConfiguracoesScreen() {
     </View>
   );
 
+  const options: {
+    label: string;
+    icon: React.ComponentProps<typeof Feather>['name'];
+    onPress: () => void;
+  }[] = [
+    { label: 'Notificações', icon: 'bell', onPress: () => {} },
+    { label: 'Preferências', icon: 'sliders', onPress: () => {} },
+    { label: 'Ajuda', icon: 'help-circle', onPress: () => {} },
+    { label: 'Sobre', icon: 'info', onPress: () => {} },
+  ];
+
   return (
     <Container className="bg-gray-50">
-      <View className="flex-1">
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <HeaderCard />
 
         {/* Bloco principal */}
@@ -305,28 +339,29 @@ export default function ConfiguracoesScreen() {
 
         {/* Opções */}
         <View className="overflow-hidden rounded-2xl bg-white shadow-sm">
-          {[
-            { label: 'Notificações', onPress: () => {} },
-            { label: 'Preferências', onPress: () => {} },
-            { label: 'Ajuda', onPress: () => {} },
-            { label: 'Sobre', onPress: () => {} },
-          ].map((item, idx, arr) => (
+          {options.map((item, idx) => (
             <TouchableOpacity
               key={item.label}
-              className={`flex-row items-center justify-between p-4 ${idx !== arr.length - 1 ? 'border-b border-gray-100' : ''}`}
+              className={`flex-row items-center justify-between p-4 ${
+                idx !== options.length - 1 ? 'border-b border-gray-100' : ''
+              }`}
               onPress={item.onPress}>
-              <Text className="text-base text-gray-900">{item.label}</Text>
-              <Text className="text-xl leading-none text-gray-300">{'›'}</Text>
+              <View className="flex-row items-center">
+                <Feather name={item.icon} size={20} color="#4B5563" />
+                <Text className="ml-3 text-base text-gray-900">{item.label}</Text>
+              </View>
+              <Feather name="chevron-right" size={20} color="#D1D5DB" />
             </TouchableOpacity>
           ))}
 
-          <TouchableOpacity className="p-4" onPress={handleSignOut}>
-            <Text className="text-base font-semibold text-red-600">Sair</Text>
+          <TouchableOpacity className="flex-row items-center p-4" onPress={handleSignOut}>
+            <Feather name="log-out" size={20} color="#DC2626" />
+            <Text className="ml-3 text-base font-semibold text-red-600">Sair</Text>
           </TouchableOpacity>
         </View>
 
         <View className="h-6" />
-      </View>
+      </ScrollView>
     </Container>
   );
 }
