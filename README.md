@@ -1,4 +1,4 @@
-# App Agendamentos IFSP
+# App Agendamentos IFSP.
 
 Aplicativo para gerenciamento de agendamentos do IFSP com autenticação integrada.
 
