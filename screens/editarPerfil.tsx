@@ -137,7 +137,7 @@ export default function EditarPerfilScreen() {
   };
 
   return (
-    <Container className="mb-10 mt-10 flex-1 bg-gray-100">
+    <Container className="mb-10 mt-5 flex-1 bg-gray-100">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
@@ -146,7 +146,7 @@ export default function EditarPerfilScreen() {
           contentContainerStyle={{ flexGrow: 1 }}
           keyboardShouldPersistTaps="handled"
           className="flex-1">
-          <View className="m-6 flex-1 justify-center">
+          <View className="m-6 flex-1">
             <View className="mb-8 w-full items-center">
               <Text
                 className="mb-2 w-full text-center text-3xl font-bold text-gray-900"
@@ -217,7 +217,9 @@ export default function EditarPerfilScreen() {
               <TouchableOpacity
                 className="mb-4 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-3"
                 onPress={handlePickLogo}>
-                <Text>{logoFile?.fileName || 'Selecionar Logotipo'}</Text>
+                <Text className="flex-1 text-center text-base font-medium text-gray-700">
+                  {logoFile?.fileName || 'Selecionar Logotipo'}
+                </Text>
               </TouchableOpacity>
               {logoPreview ? (
                 <Image
