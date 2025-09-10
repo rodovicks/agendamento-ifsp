@@ -345,8 +345,6 @@ export default function LoginScreen() {
             },
           ]);
         }
-
-        // navigation.navigate('Home');
       }
     } catch (err) {
       console.log(err);
@@ -357,22 +355,22 @@ export default function LoginScreen() {
   };
 
   const onToggleMode = () => {
-    // ✅ Limpa states e formulário ao alternar entre Login e Criar Conta
     setIsSignUp((prev) => !prev);
     setLogoFile(null);
     reset({ email: '', password: '', nome: '', telefone: '', endereco: '', ramo: '' });
   };
 
   return (
-    <Container className="flex-1 bg-gray-50">
+    <Container className="mb-10 mt-10 flex-1 bg-gray-100">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1">
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+        style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={{ flexGrow: 1 }}
           keyboardShouldPersistTaps="handled"
           className="flex-1">
-          <View className="flex-1 justify-center px-8">
+          <View className="m-6 flex-1 justify-center">
             <View className="mb-8 items-center">
               <Text className="mb-2 text-3xl font-bold text-gray-900">
                 {isSignUp ? 'Criar Conta' : 'Entrar'}

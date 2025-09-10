@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/authStore';
 import LoginScreen from '../screens/login';
 import TabNavigator from './tab-navigator';
 import Modal from '../screens/modal';
+import { estabelecimentoScreens } from './estabelecimento-screens';
 
 // Stack para usuários autenticados
 const AuthenticatedStack = createStackNavigator({
@@ -23,6 +24,7 @@ const AuthenticatedStack = createStackNavigator({
         headerLeft: () => null,
       },
     },
+    ...estabelecimentoScreens,
   },
 });
 

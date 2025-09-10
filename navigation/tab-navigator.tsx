@@ -3,6 +3,7 @@ import { HeaderButton } from '../components/HeaderButton';
 import { TabBarIcon } from '../components/TabBarIcon';
 import One from '../screens/one';
 import ConfiguracoesScreen from '../screens/configuracoes';
+import { Text } from 'react-native';
 
 const Tab = createBottomTabNavigator({
   screenOptions: function ScreenOptions() {
@@ -17,6 +18,15 @@ const Tab = createBottomTabNavigator({
 
       options: ({ navigation }) => ({
         title: 'Home',
+        tabBarLabel: ({ focused, color }) => (
+          <Text
+            className="w-full text-center text-xs"
+            numberOfLines={2}
+            ellipsizeMode="tail"
+            style={{ color }}>
+            {'Home'}
+          </Text>
+        ),
         tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
         headerRight: () => <HeaderButton onPress={() => navigation.navigate('Modal')} />,
       }),
@@ -25,6 +35,15 @@ const Tab = createBottomTabNavigator({
       screen: ConfiguracoesScreen,
       options: {
         title: 'Configurações',
+        tabBarLabel: ({ focused, color }) => (
+          <Text
+            className="w-full text-center text-xs"
+            numberOfLines={2}
+            ellipsizeMode="tail"
+            style={{ color }}>
+            {'Configurações'}
+          </Text>
+        ),
         tabBarIcon: ({ color }) => <TabBarIcon name="cog" color={color} />,
       },
     },
