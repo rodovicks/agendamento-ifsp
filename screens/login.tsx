@@ -46,7 +46,6 @@ export default function LoginScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [logoFile, setLogoFile] = useState<ImagePicker.ImagePickerAsset | null>(null);
 
-  // Biometria
   const [isHardwareAvailable, setIsHardwareAvailable] = useState(false);
   const [bioEnabled, setBioEnabled] = useState(false);
   const [bioPrompted, setBioPrompted] = useState(false);
@@ -69,14 +68,12 @@ export default function LoginScreen() {
     })();
   }, []);
 
-  // manter refresh_token atualizado quando o Supabase rotacionar
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
         const rt = session?.refresh_token;
         if (rt) SecureStore.setItemAsync(BIO_REFRESH_TOKEN_KEY, String(rt));
       }
-      // if (event === 'SIGNED_OUT') { SecureStore.deleteItemAsync(BIO_REFRESH_TOKEN_KEY); }
     });
     return () => {
       sub.subscription?.unsubscribe();
@@ -352,25 +349,20 @@ export default function LoginScreen() {
     setLogoFile(null);
     reset({ email: '', password: '', nome: '', telefone: '', endereco: '', ramo: '' });
   };
-
-  // === REVER TUTORIAL (limpa flag + navegação robusta) ===
   const handleResetTutorial = async () => {
     try {
       await AsyncStorage.removeItem(ONBOARDING_KEY);
 
-      // 1) tenta substituir no navigator atual
       const okReplace = navigation?.replace && (() => {
         try { navigation.replace('Intro'); return true; } catch { return false; }
       })();
       if (okReplace) return;
 
-      // 2) tenta navegar direto (pode subir para parent se o nome existir lá)
       const okNavigate = (() => {
         try { navigation.navigate('Intro'); return true; } catch { return false; }
       })();
       if (okNavigate) return;
 
-      // 3) tenta resetar o PARENT (mais garantido)
       const parent = navigation.getParent?.();
       if (parent) {
         parent.dispatch(
@@ -382,7 +374,6 @@ export default function LoginScreen() {
         return;
       }
 
-      // 4) último recurso: reset no atual
       navigation.dispatch(
         CommonActions.reset({
           index: 0,
@@ -541,8 +532,8 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* ======== REVER TUTORIAL (TESTE) ======== */}
-            <View className="mt-6 items-center">
+            {!isSignUp && (
+              <View className="mt-6 items-center">
               <TouchableOpacity
                 onPress={handleResetTutorial}
                 style={{
@@ -558,11 +549,11 @@ export default function LoginScreen() {
                   Rever tutorial
                 </Text>
               </TouchableOpacity>
-              <Text className="mt-2 text-xs text-gray-500">
-                {/* Zera {ONBOARDING_KEY} e abre a tela Intro. */}
-              </Text>
             </View>
-            {/* ======================================= */}
+            )}
+
+            
+           
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
