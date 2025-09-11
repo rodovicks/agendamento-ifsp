@@ -3,17 +3,12 @@ import RamoAtividadeScreen from '../screens/ramoAtividade';
 import ServicosScreen from '../screens/servicos';
 import ColaboradoresScreen from '../screens/colaboradores';
 import AgendamentoScreen from '../screens/agendamento';
-import EstabelecimentoScreen from '../screens/estabelecimento';
 import AjustesScreen from '../screens/ajustes';
 
 export const estabelecimentoScreens = {
   EditarPerfil: {
     screen: EditarPerfilScreen,
     options: { title: 'Editar Perfil' },
-  },
-  Estabelecimento: {
-    screen: EstabelecimentoScreen,
-    options: { title: 'Estabelecimento' },
   },
   RamoAtividade: {
     screen: RamoAtividadeScreen,
