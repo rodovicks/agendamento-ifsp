@@ -1,3 +1,4 @@
+// screens/login.tsx
 import { useForm, Controller } from 'react-hook-form';
 import { useEffect, useMemo, useState } from 'react';
 import * as yup from 'yup';
@@ -5,6 +6,7 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import * as ImagePicker from 'expo-image-picker';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -20,7 +22,7 @@ import { Input } from '../components/Input';
 import { supabase } from '../utils/supabase';
 import * as FileSystem from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 
 // Types
 interface SignForm {
@@ -35,6 +37,7 @@ interface SignForm {
 const BIO_FLAG_KEY = 'bio_enabled';
 const BIO_REFRESH_TOKEN_KEY = 'bio_refresh_token';
 const BIO_PROMPTED_KEY = 'bio_prompted'; // perguntar biometria só no primeiro login
+const ONBOARDING_KEY = '@onboarding_seen'; // flag do tutorial
 
 export default function LoginScreen() {
   const navigation = useNavigation<any>();
@@ -43,7 +46,6 @@ export default function LoginScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [logoFile, setLogoFile] = useState<ImagePicker.ImagePickerAsset | null>(null);
 
-  // Biometria
   const [isHardwareAvailable, setIsHardwareAvailable] = useState(false);
   const [bioEnabled, setBioEnabled] = useState(false);
   const [bioPrompted, setBioPrompted] = useState(false);
@@ -66,21 +68,19 @@ export default function LoginScreen() {
     })();
   }, []);
 
-  // manter refresh_token atualizado quando o Supabase rotacionar
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
         const rt = session?.refresh_token;
         if (rt) SecureStore.setItemAsync(BIO_REFRESH_TOKEN_KEY, String(rt));
       }
-      // if (event === 'SIGNED_OUT') { SecureStore.deleteItemAsync(BIO_REFRESH_TOKEN_KEY); }
     });
     return () => {
       sub.subscription?.unsubscribe();
     };
   }, []);
 
-  // ✅ Two schemas (login vs signup) and swap the resolver based on isSignUp
+  // Schemas
   const loginSchema = yup.object({
     email: yup.string().email('Email inválido').required('Email é obrigatório'),
     password: yup.string().min(6, 'Mínimo 6 caracteres').required('Senha é obrigatória'),
@@ -209,7 +209,6 @@ export default function LoginScreen() {
         return;
       }
 
-      // ✅ Restaurar usando refreshSession (tokens são rotativos)
       const { data, error } = await supabase.auth.refreshSession({ refresh_token });
       if (error || !data?.session) {
         Alert.alert(
@@ -219,24 +218,22 @@ export default function LoginScreen() {
         return;
       }
 
-      // Salva o novo refresh_token pós-rotação
       const newRefresh = data.session.refresh_token;
       if (newRefresh) {
         await SecureStore.setItemAsync(BIO_REFRESH_TOKEN_KEY, String(newRefresh));
       }
 
-      // navigation.navigate('Home');
       Alert.alert('Sucesso', 'Login realizado com biometria!');
     } catch {
       Alert.alert('Erro', 'Falha ao autenticar com biometria.');
     }
   };
 
+  // === LOGIN / SIGNUP ===
   const handleAuth = async (formData: SignForm) => {
     setLoading(true);
     try {
       if (isSignUp) {
-        // 1) Cria o usuário primeiro
         const { data, error } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.password,
@@ -266,7 +263,6 @@ export default function LoginScreen() {
         const userId = data.user?.id;
         let logoUrl: string | null = null;
 
-        // 2) Upload da logo (se existir)
         if (userId && logoFile) {
           logoUrl = await uploadLogoAndGetPublicUrl(logoFile, userId);
           if (logoUrl) {
@@ -274,7 +270,6 @@ export default function LoginScreen() {
           }
         }
 
-        // 3) Salva o estabelecimento
         if (userId) {
           const { error: insertError } = await supabase.from('estabelecimentos').insert({
             user_id: userId,
@@ -293,7 +288,6 @@ export default function LoginScreen() {
               'Usuário criado, mas houve erro ao salvar dados do estabelecimento. Você pode completar o cadastro depois no perfil.'
             );
           } else {
-            // ✅ Após criar a conta, avisa e volta para a tela de login
             Alert.alert(
               'Sucesso',
               'Conta criada! Verifique seu email para confirmar. Você será direcionado ao login.',
@@ -301,7 +295,6 @@ export default function LoginScreen() {
                 {
                   text: 'Ok',
                   onPress: () => {
-                    // Limpa estados e volta para login
                     setLogoFile(null);
                     reset({
                       email: '',
@@ -312,7 +305,6 @@ export default function LoginScreen() {
                       ramo: '',
                     });
                     setIsSignUp(false);
-                    // navigation.goBack() ou navigation.navigate('Login') se usar rotas separadas
                   },
                 },
               ]
@@ -320,7 +312,6 @@ export default function LoginScreen() {
           }
         }
       } else {
-        // Login
         const { data, error } = await supabase.auth.signInWithPassword({
           email: formData.email,
           password: formData.password,
@@ -330,7 +321,6 @@ export default function LoginScreen() {
           return;
         }
 
-        // 🔐 Perguntar biometria apenas NO PRIMEIRO LOGIN do app
         if (!bioPrompted && isHardwareAvailable && !bioEnabled) {
           await SecureStore.setItemAsync(BIO_PROMPTED_KEY, 'true');
           setBioPrompted(true);
@@ -358,6 +348,41 @@ export default function LoginScreen() {
     setIsSignUp((prev) => !prev);
     setLogoFile(null);
     reset({ email: '', password: '', nome: '', telefone: '', endereco: '', ramo: '' });
+  };
+  const handleResetTutorial = async () => {
+    try {
+      await AsyncStorage.removeItem(ONBOARDING_KEY);
+
+      const okReplace = navigation?.replace && (() => {
+        try { navigation.replace('Intro'); return true; } catch { return false; }
+      })();
+      if (okReplace) return;
+
+      const okNavigate = (() => {
+        try { navigation.navigate('Intro'); return true; } catch { return false; }
+      })();
+      if (okNavigate) return;
+
+      const parent = navigation.getParent?.();
+      if (parent) {
+        parent.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Intro' }],
+          })
+        );
+        return;
+      }
+
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Intro' }],
+        })
+      );
+    } catch (e) {
+      Alert.alert('Erro', 'Não foi possível resetar o tutorial.');
+    }
   };
 
   return (
@@ -489,7 +514,6 @@ export default function LoginScreen() {
                 className={`mt-6 ${loading ? 'opacity-50' : ''}`}
               />
 
-              {/* Botão de login por biometria, quando disponível e habilitada */}
               {!isSignUp && isHardwareAvailable && bioEnabled && (
                 <Button
                   title="Entrar com biometria"
@@ -507,6 +531,29 @@ export default function LoginScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+
+            {!isSignUp && (
+              <View className="mt-6 items-center">
+              <TouchableOpacity
+                onPress={handleResetTutorial}
+                style={{
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: 'rgba(37, 99, 235, 0.4)',
+                  backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                }}
+              >
+                <Text style={{ color: '#3b82f6', fontWeight: '700' }}>
+                  Rever tutorial
+                </Text>
+              </TouchableOpacity>
+            </View>
+            )}
+
+            
+           
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
