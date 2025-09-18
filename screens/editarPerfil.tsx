@@ -23,7 +23,6 @@ const schema = yup.object({
   nome: yup.string().required('Nome do estabelecimento é obrigatório'),
   telefone: yup.string().required('Telefone é obrigatório'),
   endereco: yup.string().required('Endereço é obrigatório'),
-  ramo: yup.string().required('Ramo de atividade é obrigatório'),
 });
 
 export default function EditarPerfilScreen() {
@@ -43,7 +42,6 @@ export default function EditarPerfilScreen() {
       nome: estabelecimento?.nome || '',
       telefone: estabelecimento?.telefone || '',
       endereco: estabelecimento?.endereco || '',
-      ramo: estabelecimento?.ramo || '',
     },
   });
 
@@ -53,7 +51,6 @@ export default function EditarPerfilScreen() {
         nome: estabelecimento.nome,
         telefone: estabelecimento.telefone,
         endereco: estabelecimento.endereco,
-        ramo: estabelecimento.ramo,
       });
       setLogoPreview(estabelecimento.logo);
     }
@@ -124,7 +121,6 @@ export default function EditarPerfilScreen() {
         nome: formData.nome,
         telefone: formData.telefone,
         endereco: formData.endereco,
-        ramo: formData.ramo,
         logo: logoUrl || undefined,
       });
       await loadEstabelecimento();
@@ -197,19 +193,6 @@ export default function EditarPerfilScreen() {
                     onChangeText={onChange}
                     placeholder="Endereço"
                     error={errors.endereco?.message}
-                  />
-                )}
-              />
-              <Controller
-                control={control}
-                name="ramo"
-                render={({ field: { onChange, value } }) => (
-                  <Input
-                    label="Ramo de Atividade"
-                    value={value}
-                    onChangeText={onChange}
-                    placeholder="Ramo de atividade"
-                    error={errors.ramo?.message}
                   />
                 )}
               />

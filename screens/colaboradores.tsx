@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import {
   Alert,
   FlatList,
@@ -19,6 +20,7 @@ import {
 import { Button } from '../components/Button';
 import { Container } from '../components/Container';
 import { Input } from '../components/Input';
+import { MultiSelectServicos } from '../components/MultiSelectServicos';
 import { supabase } from '../utils/supabase';
 import { useAuthStore } from '../store/authStore';
 
@@ -32,6 +34,7 @@ interface Colaborador {
 interface Servico {
   id: number;
   nome: string;
+  descricao?: string;
 }
 
 const schema = yup.object({
@@ -39,6 +42,7 @@ const schema = yup.object({
 });
 
 export default function ColaboradoresScreen() {
+  const navigation = useNavigation();
   const { estabelecimento } = useAuthStore();
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
   const [servicos, setServicos] = useState<Servico[]>([]);
@@ -60,6 +64,16 @@ export default function ColaboradoresScreen() {
       nome: '',
     },
   });
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity onPress={() => abrirModal()} style={{ marginRight: 15 }}>
+          <Feather name="plus" size={24} color="#1f2937" />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
 
   useEffect(() => {
     buscarColaboradores();
@@ -91,7 +105,7 @@ export default function ColaboradoresScreen() {
 
     const { data, error } = await supabase
       .from('servicos')
-      .select('id, nome')
+      .select('id, nome, descricao')
       .eq('estabelecimento_id', estabelecimento.id);
 
     if (data) setServicos(data);
@@ -251,33 +265,13 @@ export default function ColaboradoresScreen() {
   }
 
   return (
-    <Container className="mb-10 mt-5 flex-1 bg-gray-100">
+    <Container className="mb-10 mt-1 flex-1 bg-gray-100">
       <View className="m-6 flex-1">
-        <View className="mb-8 w-full items-center">
-          <Text
-            className="mb-2 w-full text-center text-3xl font-bold text-gray-900"
-            numberOfLines={2}
-            ellipsizeMode="tail">
-            Colaboradores
-          </Text>
-          <Text className="w-full text-center text-gray-600">
-            Gerencie os colaboradores do seu estabelecimento
-          </Text>
-        </View>
-        <TouchableOpacity
-          onPress={() => abrirModal()}
-          className="mb-6 flex-row items-center justify-center rounded-[28px] bg-indigo-500 p-4 shadow-md">
-          <Feather name="plus" size={20} color="white" />
-          <Text className="ml-2 text-center text-lg font-semibold text-white">
-            Adicionar Colaborador
-          </Text>
-        </TouchableOpacity>
-
         <FlatList
           data={colaboradores}
           keyExtractor={(item) => item.id.toString()}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ flexGrow: 1 }}
+          // Removido flexGrow: 1 para evitar problemas de layout no iOS
           renderItem={({ item }) => (
             <View className="mb-4 flex-row items-center rounded-lg border border-gray-200 bg-white p-4">
               <View className="mr-4">
@@ -386,38 +380,15 @@ export default function ColaboradoresScreen() {
                   </View>
 
                   <View className="mb-4">
-                    <Text className="mb-4 text-base font-medium text-gray-700">
-                      Serviços Preferidos:
+                    <Text className="mb-2 text-base font-medium text-gray-700">
+                      Serviços Preferidos
                     </Text>
-                    {servicos.map((servico) => (
-                      <TouchableOpacity
-                        key={servico.id}
-                        className="mb-3 flex-row items-center"
-                        onPress={() => {
-                          setServicosSelecionados((prev) =>
-                            prev.includes(servico.id)
-                              ? prev.filter((id) => id !== servico.id)
-                              : [...prev, servico.id]
-                          );
-                        }}>
-                        <View
-                          className={`mr-3 h-5 w-5 rounded border-2 ${
-                            servicosSelecionados.includes(servico.id)
-                              ? 'border-indigo-500 bg-indigo-500'
-                              : 'border-gray-300 bg-white'
-                          }`}>
-                          {servicosSelecionados.includes(servico.id) && (
-                            <Text className="text-center text-xs text-white">✓</Text>
-                          )}
-                        </View>
-                        <Text className="text-base text-gray-900">{servico.nome}</Text>
-                      </TouchableOpacity>
-                    ))}
-                    {servicos.length === 0 && (
-                      <Text className="text-center text-gray-500">
-                        Nenhum serviço cadastrado ainda.
-                      </Text>
-                    )}
+                    <MultiSelectServicos
+                      servicos={servicos}
+                      servicosSelecionados={servicosSelecionados}
+                      onServicosChange={setServicosSelecionados}
+                      placeholder="Selecione os serviços preferidos"
+                    />
                   </View>
 
                   <View className="mt-8 flex-row">
