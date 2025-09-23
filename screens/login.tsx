@@ -321,6 +321,24 @@ export default function LoginScreen() {
           return;
         }
 
+        // Exigir troca de senha se estiver com senha temporária
+        try {
+          const { data: udata } = await supabase.auth.getUser();
+          const mustChange = Boolean(udata?.user?.user_metadata?.must_change_password);
+          if (mustChange) {
+            try {
+              // Tenta navegar diretamente
+              (navigation as any)?.navigate?.('AlterarSenhaObrigatoria');
+            } catch {
+              // Fallback via reset
+              navigation.dispatch(
+                CommonActions.reset({ index: 0, routes: [{ name: 'AlterarSenhaObrigatoria' }] })
+              );
+            }
+            return;
+          }
+        } catch {}
+
         if (!bioPrompted && isHardwareAvailable && !bioEnabled) {
           await SecureStore.setItemAsync(BIO_PROMPTED_KEY, 'true');
           setBioPrompted(true);
@@ -534,22 +552,35 @@ export default function LoginScreen() {
 
             {!isSignUp && (
               <View className="mt-6 items-center">
-              <TouchableOpacity
-                onPress={handleResetTutorial}
-                style={{
-                  paddingVertical: 10,
-                  paddingHorizontal: 16,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: 'rgba(37, 99, 235, 0.4)',
-                  backgroundColor: 'rgba(59, 130, 246, 0.08)',
-                }}
-              >
-                <Text style={{ color: '#3b82f6', fontWeight: '700' }}>
-                  Rever tutorial
-                </Text>
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity
+                  onPress={() => (navigation as any)?.navigate?.('RecuperarSenha')}
+                  style={{
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: 'rgba(37, 99, 235, 0.4)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text style={{ color: '#3b82f6', fontWeight: '700' }}>Esqueci minha senha</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleResetTutorial}
+                  style={{
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: 'rgba(37, 99, 235, 0.4)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                  }}
+                >
+                  <Text style={{ color: '#3b82f6', fontWeight: '700' }}>Rever tutorial</Text>
+                </TouchableOpacity>
+              </View>
             )}
 
             

@@ -15,6 +15,8 @@ import { estabelecimentoScreens } from './estabelecimento-screens';
 
 // Telas não autenticadas
 import LoginScreen from '../screens/login';
+import RecuperarSenha from '../screens/recuperarSenha';
+import AlterarSenhaObrigatoria from '../screens/alterarSenhaObrigatoria';
 import IntroScreen from '../screens/intro';
 
 // ====== STACKS ======
@@ -27,6 +29,10 @@ const AuthenticatedStack = createStackNavigator({
       screen: Modal,
       options: { presentation: 'modal', headerLeft: () => null },
     },
+    AlterarSenhaObrigatoria: {
+      screen: AlterarSenhaObrigatoria,
+      options: { title: 'Alterar senha' },
+    },
     ...estabelecimentoScreens,
   },
 });
@@ -37,6 +43,7 @@ const UnauthIntroFirst = createStackNavigator({
   screens: {
     Intro: { screen: IntroScreen, options: { headerShown: false } },
     Login: { screen: LoginScreen, options: { headerShown: false } },
+    RecuperarSenha: { screen: RecuperarSenha, options: { title: 'Recuperar senha' } },
   },
 });
 
@@ -46,6 +53,7 @@ const UnauthLoginOnly = createStackNavigator({
   screens: {
     Intro: { screen: IntroScreen, options: { headerShown: false } },
     Login: { screen: LoginScreen, options: { headerShown: false } },
+    RecuperarSenha: { screen: RecuperarSenha, options: { title: 'Recuperar senha' } },
   },
 });
 
