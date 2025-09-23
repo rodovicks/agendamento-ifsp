@@ -10,10 +10,6 @@ export const estabelecimentoScreens = {
     screen: EditarPerfilScreen,
     options: { title: 'Editar Perfil' },
   },
-  RamoAtividade: {
-    screen: RamoAtividadeScreen,
-    options: { title: 'Ramo de Atividade' },
-  },
   Servicos: {
     screen: ServicosScreen,
     options: { title: 'Serviços' },

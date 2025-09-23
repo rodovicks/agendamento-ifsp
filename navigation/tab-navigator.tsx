@@ -1,8 +1,9 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { HeaderButton } from '../components/HeaderButton';
+import { AddButton } from '../components/AddButton';
 import { TabBarIcon } from '../components/TabBarIcon';
 import One from '../screens/one';
 import ConfiguracoesScreen from '../screens/configuracoes';
+import AtendimentosScreen from '../screens/atendimentos';
 import { Text } from 'react-native';
 
 const Tab = createBottomTabNavigator({
@@ -28,8 +29,24 @@ const Tab = createBottomTabNavigator({
           </Text>
         ),
         tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
-        headerRight: () => <HeaderButton onPress={() => navigation.navigate('Modal')} />,
+        headerRight: () => <AddButton onPress={() => navigation.navigate('Agendamento')} />,
       }),
+    },
+    Atendimentos: {
+      screen: AtendimentosScreen,
+      options: {
+        title: 'Atendimentos',
+        tabBarLabel: ({ focused, color }) => (
+          <Text
+            className="w-full text-center text-xs"
+            numberOfLines={2}
+            ellipsizeMode="tail"
+            style={{ color }}>
+            {'Atendimentos'}
+          </Text>
+        ),
+        tabBarIcon: ({ color }) => <TabBarIcon name="calendar-check-o" color={color} />,
+      },
     },
     Configuracoes: {
       screen: ConfiguracoesScreen,
