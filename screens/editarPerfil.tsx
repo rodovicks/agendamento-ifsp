@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as ImagePicker from 'expo-image-picker';
+import { useTheme } from '../contexts/ThemeContext';
+import { getThemeClasses } from '../utils/theme';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -12,16 +14,23 @@ import {
   TouchableOpacity,
   View,
   Image,
+  Keyboard,
+  Dimensions,
 } from 'react-native';
 import { Button } from '../components/Button';
 import { Container } from '../components/Container';
 import { Input } from '../components/Input';
 import { useAuthStore } from '../store/authStore';
 import { estabelecimentoService } from '../utils/estabelecimento';
+import { formatPhoneNumber, unformatPhoneNumber } from '../utils/phoneMask';
 
 const schema = yup.object({
   nome: yup.string().required('Nome do estabelecimento é obrigatório'),
-  telefone: yup.string().required('Telefone é obrigatório'),
+  telefone: yup
+    .string()
+    .required('Telefone é obrigatório')
+    .min(10, 'Telefone deve ter pelo menos 10 dígitos')
+    .max(11, 'Telefone deve ter no máximo 11 dígitos'),
   endereco: yup.string().required('Endereço é obrigatório'),
 });
 
@@ -30,6 +39,9 @@ export default function EditarPerfilScreen() {
   const [loading, setLoading] = useState(false);
   const [logoFile, setLogoFile] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | undefined>(estabelecimento?.logo);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const { isDark } = useTheme();
+  const themeClasses = getThemeClasses(isDark);
 
   const {
     control,
@@ -55,6 +67,21 @@ export default function EditarPerfilScreen() {
       setLogoPreview(estabelecimento.logo);
     }
   }, [estabelecimento, reset]);
+
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (event) => {
+      setKeyboardHeight(event.endCoordinates.height);
+    });
+
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
 
   const handlePickLogo = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -133,14 +160,18 @@ export default function EditarPerfilScreen() {
   };
 
   return (
-    <Container className="mb-10 mt-5 flex-1 bg-gray-100">
+    <Container className="flex-1 bg-gray-100">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         style={{ flex: 1 }}>
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingBottom: Platform.OS === 'android' ? keyboardHeight + 50 : 50,
+          }}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
           className="flex-1">
           <View className="m-6 flex-1">
             <View className="mb-8 w-full items-center">
@@ -175,9 +206,12 @@ export default function EditarPerfilScreen() {
                 render={({ field: { onChange, value } }) => (
                   <Input
                     label="Telefone"
-                    value={value}
-                    onChangeText={onChange}
-                    placeholder="Telefone"
+                    value={formatPhoneNumber(value || '')}
+                    onChangeText={(text) => {
+                      const unmasked = unformatPhoneNumber(text);
+                      onChange(unmasked);
+                    }}
+                    placeholder="(11) 99999-9999"
                     keyboardType="phone-pad"
                     error={errors.telefone?.message}
                   />
@@ -196,11 +230,13 @@ export default function EditarPerfilScreen() {
                   />
                 )}
               />
-              <Text className="mb-2 text-base font-medium text-gray-700">Logotipo</Text>
+              <Text className={`mb-2 text-base font-medium ${themeClasses.textPrimary}`}>
+                Logotipo
+              </Text>
               <TouchableOpacity
-                className="mb-4 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-3"
+                className={`mb-4 w-full items-center justify-center rounded-lg border px-4 py-4 ${themeClasses.inputBackground} ${themeClasses.border}`}
                 onPress={handlePickLogo}>
-                <Text className="flex-1 text-center text-base font-medium text-gray-700">
+                <Text className={`text-center text-base font-medium ${themeClasses.textSecondary}`}>
                   {logoFile?.fileName || 'Selecionar Logotipo'}
                 </Text>
               </TouchableOpacity>

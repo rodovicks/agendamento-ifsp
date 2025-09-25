@@ -1,155 +1,70 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, ScrollView, RefreshControl, Alert } from 'react-native';
 import { Container } from '../components/Container';
-import { supabase } from '../utils/supabase';
 import { useAuthStore } from '../store/authStore';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Feather } from '@expo/vector-icons';
-import DateTimePickerModal from 'react-native-modal-datetime-picker';
-
-interface Agendamento {
-  id: string;
-  cliente_nome: string;
-  cliente_telefone: string;
-  cliente_email?: string;
-  data_agendamento: string;
-  hora_inicio: string;
-  hora_fim: string;
-  status?: string;
-  servico_id?: number;
-  colaborador_id?: number;
-  observacoes?: string;
-  servicos?: { nome: string }[];
-  colaboradores?: { nome: string }[];
-}
+import { useNavigation } from '@react-navigation/native';
+import {
+  NavegacaoData,
+  ListaAgendamentos,
+  EstadosLista,
+  ModalOpcoes,
+  AgendamentosService,
+  type Agendamento,
+} from '../components/Agendamentos';
 
 export default function TabOneScreen() {
   const { estabelecimento } = useAuthStore();
+  const navigation = useNavigation();
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [dataSelecionada, setDataSelecionada] = useState(new Date());
   const [mostrarCalendario, setMostrarCalendario] = useState(false);
   const [servicosLookup, setServicosLookup] = useState<Record<number, string>>({});
+  const [modalVisible, setModalVisible] = useState(false);
+  const [agendamentoSelecionado, setAgendamentoSelecionado] = useState<Agendamento | null>(null);
 
   useEffect(() => {
-    buscarServicos();
-    buscarAgendamentos();
+    if (estabelecimento?.id) {
+      buscarServicos();
+      buscarAgendamentos();
+    }
   }, [estabelecimento, dataSelecionada]);
 
   const buscarServicos = async () => {
     if (!estabelecimento?.id) return;
 
-    try {
-      const { data, error } = await supabase
-        .from('servicos')
-        .select('id, nome')
-        .eq('estabelecimento_id', estabelecimento.id);
-
-      if (error) {
-        console.error('Erro ao buscar serviços:', error);
-      } else if (data) {
-        const lookup = data.reduce(
-          (acc, servico) => {
-            acc[servico.id] = servico.nome;
-            return acc;
-          },
-          {} as Record<number, string>
-        );
-        setServicosLookup(lookup);
-      }
-    } catch (error) {
-      console.error('Erro:', error);
-    }
+    const servicos = await AgendamentosService.buscarServicos(estabelecimento.id);
+    setServicosLookup(servicos);
   };
 
-  const buscarAgendamentos = async () => {
+  const buscarAgendamentos = async (isRefreshing = false) => {
     if (!estabelecimento?.id) return;
 
-    setLoading(true);
+    if (isRefreshing) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
     try {
-      const dataFormatada = dataSelecionada.toISOString().split('T')[0];
-
-      const { data, error } = await supabase
-        .from('agendamentos')
-        .select(
-          `
-          id,
-          cliente_nome,
-          cliente_telefone,
-          cliente_email,
-          data_agendamento,
-          hora_inicio,
-          hora_fim,
-          status,
-          servico_id,
-          colaborador_id,
-          observacoes,
-          servicos (nome),
-          colaboradores (nome)
-        `
-        )
-        .eq('estabelecimento_id', estabelecimento.id)
-        .eq('data_agendamento', dataFormatada)
-        .order('hora_inicio', { ascending: true });
-
-      if (error) {
-        console.error('Erro ao buscar agendamentos:', error);
-      } else {
-        setAgendamentos(data || []);
-      }
+      const agendamentos = await AgendamentosService.buscarAgendamentos(
+        estabelecimento.id,
+        dataSelecionada
+      );
+      setAgendamentos(agendamentos);
     } catch (error) {
       console.error('Erro:', error);
     } finally {
-      setLoading(false);
+      if (isRefreshing) {
+        setRefreshing(false);
+      } else {
+        setLoading(false);
+      }
     }
   };
 
-  const formatarData = (dataStr: string) => {
-    const data = new Date(dataStr + 'T00:00:00');
-    return data.toLocaleDateString('pt-BR');
-  };
-
-  const formatarDataCompleta = (data: Date) => {
-    const hoje = new Date();
-    const amanha = new Date(hoje);
-    amanha.setDate(hoje.getDate() + 1);
-
-    if (data.toDateString() === hoje.toDateString()) {
-      return 'Hoje';
-    } else if (data.toDateString() === amanha.toDateString()) {
-      return 'Amanhã';
-    } else {
-      return data.toLocaleDateString('pt-BR', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-      });
-    }
-  };
-
-  const isAgendamentoAtrasado = (data: string, horario: string) => {
-    const agora = new Date();
-    const dataAgendamento = new Date(data + 'T' + horario);
-    return dataAgendamento < agora;
-  };
-
-  const obterCorStatus = (status?: string, isAtrasado?: boolean) => {
-    if (isAtrasado) {
-      return 'bg-red-100 text-red-800 border-red-200';
-    }
-
-    switch (status) {
-      case 'confirmado':
-        return 'bg-green-100 text-green-800';
-      case 'cancelado':
-        return 'bg-gray-100 text-gray-800';
-      case 'pendente':
-        return 'bg-yellow-100 text-yellow-800';
-      default:
-        return 'bg-blue-100 text-blue-800';
-    }
-  };
-
+  // Funções de navegação de data
   const navegarData = (direcao: 'anterior' | 'proxima') => {
     const novaData = new Date(dataSelecionada);
     if (direcao === 'anterior') {
@@ -177,135 +92,213 @@ export default function TabOneScreen() {
     setMostrarCalendario(false);
   };
 
+  // Funções do modal
+  const abrirModalOpcoes = (agendamento: Agendamento) => {
+    setAgendamentoSelecionado(agendamento);
+    setModalVisible(true);
+  };
+
+  const fecharModal = () => {
+    setModalVisible(false);
+    setAgendamentoSelecionado(null);
+  };
+
+  const editarAgendamento = () => {
+    if (!agendamentoSelecionado) return;
+
+    fecharModal();
+
+    // Navegação para tela de agendamento com dados para edição
+    const dadosParaEdicao = {
+      id: agendamentoSelecionado.id,
+      nome: agendamentoSelecionado.cliente_nome,
+      telefone: agendamentoSelecionado.cliente_telefone,
+      email: agendamentoSelecionado.cliente_email,
+      data: agendamentoSelecionado.data_agendamento,
+      horario: agendamentoSelecionado.hora_inicio,
+      servico_id: agendamentoSelecionado.servico_id,
+      colaborador_id: agendamentoSelecionado.colaborador_id,
+      observacoes: agendamentoSelecionado.observacoes,
+      isEdicao: true,
+    };
+
+    // @ts-ignore - Navegação específica do projeto
+    navigation.navigate('Agendamento', { dadosParaEdicao });
+  };
+
+  const cancelarAgendamento = async () => {
+    if (!agendamentoSelecionado) return;
+
+    fecharModal();
+    Alert.alert(
+      'Cancelar Agendamento',
+      `Tem certeza que deseja cancelar o agendamento de ${agendamentoSelecionado.cliente_nome}?`,
+      [
+        {
+          text: 'Não',
+          style: 'cancel',
+        },
+        {
+          text: 'Sim, cancelar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const sucesso = await AgendamentosService.atualizarStatusAgendamento(
+                agendamentoSelecionado.id,
+                'cancelado'
+              );
+
+              if (sucesso) {
+                Alert.alert('Sucesso', 'Agendamento cancelado com sucesso!');
+                buscarAgendamentos();
+              } else {
+                Alert.alert('Erro', 'Não foi possível cancelar o agendamento.');
+              }
+            } catch (error) {
+              console.error('Erro:', error);
+              Alert.alert('Erro', 'Ocorreu um erro inesperado.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const finalizarAgendamento = async () => {
+    if (!agendamentoSelecionado) return;
+
+    fecharModal();
+    Alert.alert(
+      'Finalizar Agendamento',
+      `Confirma que o agendamento de ${agendamentoSelecionado.cliente_nome} foi concluído?`,
+      [
+        {
+          text: 'Não',
+          style: 'cancel',
+        },
+        {
+          text: 'Sim, finalizar',
+          onPress: async () => {
+            try {
+              const sucesso = await AgendamentosService.atualizarStatusAgendamento(
+                agendamentoSelecionado.id,
+                'concluido'
+              );
+
+              if (sucesso) {
+                Alert.alert('Sucesso', 'Agendamento finalizado com sucesso!');
+                buscarAgendamentos();
+              } else {
+                Alert.alert('Erro', 'Não foi possível finalizar o agendamento.');
+              }
+            } catch (error) {
+              console.error('Erro:', error);
+              Alert.alert('Erro', 'Ocorreu um erro inesperado.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const copiarTextoAgendamento = async () => {
+    if (!agendamentoSelecionado || !estabelecimento?.id) return;
+
+    try {
+      const textoAgendamento = await AgendamentosService.gerarTextoAgendamento(
+        agendamentoSelecionado,
+        estabelecimento.id,
+        estabelecimento.nome || 'Nosso estabelecimento',
+        servicosLookup
+      );
+
+      await AgendamentosService.copiarTextoAgendamento(textoAgendamento);
+    } catch (error) {
+      console.error('Erro ao copiar texto:', error);
+      Alert.alert('Erro', 'Não foi possível copiar o texto.');
+    }
+
+    fecharModal();
+  };
+
+  const excluirAgendamento = async () => {
+    if (!agendamentoSelecionado) return;
+
+    fecharModal();
+    Alert.alert(
+      'Excluir Agendamento',
+      `Tem certeza que deseja excluir PERMANENTEMENTE o agendamento de ${agendamentoSelecionado.cliente_nome}?\n\nEsta ação não pode ser desfeita.`,
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Sim, excluir',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const sucesso = await AgendamentosService.excluirAgendamento(
+                agendamentoSelecionado.id
+              );
+
+              if (sucesso) {
+                Alert.alert('Sucesso', 'Agendamento excluído com sucesso!');
+                buscarAgendamentos();
+              } else {
+                Alert.alert('Erro', 'Não foi possível excluir o agendamento.');
+              }
+            } catch (error) {
+              console.error('Erro:', error);
+              Alert.alert('Erro', 'Ocorreu um erro inesperado.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <Container className="flex-1 bg-gray-50">
       <ScrollView
         className="flex-1"
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={buscarAgendamentos} />}>
-        <View className="border-b border-gray-200 bg-white px-4 py-3">
-          <View className="flex-row items-center justify-between">
-            <TouchableOpacity onPress={() => navegarData('anterior')} className="p-2">
-              <Feather name="chevron-left" size={24} color="#6B7280" />
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={abrirCalendario} className="flex-1 items-center">
-              <Text className="flex-1 text-lg font-semibold text-gray-800">
-                {formatarDataCompleta(dataSelecionada)}
-              </Text>
-              <Text className="flex-1 text-sm text-gray-500">
-                {dataSelecionada.toLocaleDateString('pt-BR')}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => navegarData('proxima')} className="p-2">
-              <Feather name="chevron-right" size={24} color="#6B7280" />
-            </TouchableOpacity>
-          </View>
-
-          {dataSelecionada.toDateString() !== new Date().toDateString() && (
-            <TouchableOpacity
-              onPress={irParaHoje}
-              className="mt-2 self-center rounded-full bg-indigo-100 px-3 py-1">
-              <Text className="text-sm font-medium text-indigo-700">Ir para hoje</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <DateTimePickerModal
-          isVisible={mostrarCalendario}
-          mode="date"
-          date={dataSelecionada}
-          onConfirm={confirmarData}
-          onCancel={cancelarCalendario}
-          locale="pt-BR"
-          display="calendar"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => buscarAgendamentos(true)} />
+        }>
+        <NavegacaoData
+          dataSelecionada={dataSelecionada}
+          onDataAnterior={() => navegarData('anterior')}
+          onProximaData={() => navegarData('proxima')}
+          onAbrirCalendario={abrirCalendario}
+          onIrParaHoje={irParaHoje}
+          mostrarCalendario={mostrarCalendario}
+          onConfirmarData={confirmarData}
+          onCancelarCalendario={cancelarCalendario}
         />
 
         <View className="p-4">
-          {agendamentos.length === 0 ? (
-            <View className="items-center justify-center py-12">
-              <FontAwesome name="calendar-o" size={64} color="#9CA3AF" />
-              <Text className="mt-4 flex-1 text-center text-lg text-gray-500">
-                Nenhum agendamento para este dia
-              </Text>
-              <Text className="mt-2 flex-1 text-center text-sm text-gray-400">
-                Toque no botão + para criar um novo agendamento
-              </Text>
-            </View>
-          ) : (
-            <View className="space-y-3">
-              {agendamentos.map((agendamento) => {
-                const isAtrasado = isAgendamentoAtrasado(
-                  agendamento.data_agendamento,
-                  agendamento.hora_inicio
-                );
-                return (
-                  <TouchableOpacity
-                    key={agendamento.id}
-                    className={`rounded-lg border bg-white p-4 shadow-sm ${
-                      isAtrasado ? 'border-red-200 bg-red-50' : 'border-gray-200'
-                    }`}
-                    activeOpacity={0.7}>
-                    {isAtrasado && (
-                      <View className="mb-2 flex-row items-center">
-                        <Feather name="clock" size={16} color="#DC2626" />
-                        <Text className="ml-1 flex-1 text-sm font-medium text-red-600">
-                          Agendamento em atraso
-                        </Text>
-                      </View>
-                    )}
+          <EstadosLista
+            loading={loading}
+            agendamentos={agendamentos}
+            dataSelecionada={dataSelecionada}
+          />
 
-                    <View className="mb-2 flex-row items-start justify-between">
-                      <Text className="flex-1 text-lg font-semibold text-gray-800">
-                        {agendamento.cliente_nome}
-                      </Text>
-                      <View
-                        className={`ml-2 rounded-full px-2 py-1 ${obterCorStatus(agendamento.status, isAtrasado)}`}>
-                        <Text className="flex-1 text-xs font-medium">
-                          {agendamento.status || 'agendado'}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View className="mb-1 flex-row items-center">
-                      <FontAwesome name="clock-o" size={14} color="#6B7280" />
-                      <Text
-                        className={`ml-2 flex-1 ${isAtrasado ? 'font-medium text-red-600' : 'text-gray-600'}`}>
-                        {agendamento.hora_inicio} - {agendamento.hora_fim}
-                      </Text>
-                    </View>
-
-                    <View className="mb-1 flex-row items-center">
-                      <FontAwesome name="phone" size={14} color="#6B7280" />
-                      <Text className="ml-2 flex-1 text-gray-600">
-                        {agendamento.cliente_telefone}
-                      </Text>
-                    </View>
-
-                    {agendamento.servicos && agendamento.servicos.length > 0 && (
-                      <View className="mb-1 flex-row items-center">
-                        <FontAwesome name="scissors" size={14} color="#6B7280" />
-                        <Text className="ml-2 flex-1 text-gray-600">
-                          {agendamento.servicos.map((servico) => servico.nome).join(', ')}
-                        </Text>
-                      </View>
-                    )}
-
-                    {agendamento.colaboradores && agendamento.colaboradores.length > 0 && (
-                      <View className="flex-row items-center">
-                        <FontAwesome name="user" size={14} color="#6B7280" />
-                        <Text className="ml-2 flex-1 text-gray-600">
-                          {agendamento.colaboradores[0].nome}
-                        </Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+          {!loading && agendamentos.length > 0 && (
+            <ListaAgendamentos agendamentos={agendamentos} onAbrirModal={abrirModalOpcoes} />
           )}
         </View>
       </ScrollView>
+
+      <ModalOpcoes
+        visible={modalVisible}
+        agendamento={agendamentoSelecionado}
+        onFechar={fecharModal}
+        onEditar={editarAgendamento}
+        onFinalizar={finalizarAgendamento}
+        onCancelar={cancelarAgendamento}
+        onExcluir={excluirAgendamento}
+        onCopiar={copiarTextoAgendamento}
+      />
     </Container>
   );
 }

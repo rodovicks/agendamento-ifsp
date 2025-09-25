@@ -56,3 +56,67 @@ $$ language 'plpgsql';
 CREATE TRIGGER update_estabelecimentos_updated_at 
     BEFORE UPDATE ON estabelecimentos 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Criar tabela de configurações do estabelecimento
+CREATE TABLE IF NOT EXISTS configuracoes_estabelecimento (
+    id UUID DEFAULT gen_random_uuid () PRIMARY KEY,
+    estabelecimento_id UUID REFERENCES estabelecimentos (id) ON DELETE CASCADE,
+    template_mensagem TEXT DEFAULT NULL,
+    created_at TIMESTAMP
+    WITH
+        TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP
+    WITH
+        TIME ZONE DEFAULT NOW()
+);
+
+-- Criar índice para melhor performance
+CREATE INDEX IF NOT EXISTS idx_configuracoes_estabelecimento_id ON configuracoes_estabelecimento (estabelecimento_id);
+
+-- Habilitar RLS (Row Level Security)
+ALTER TABLE configuracoes_estabelecimento ENABLE ROW LEVEL SECURITY;
+
+-- Criar políticas de acesso
+CREATE POLICY "Usuários podem ver configurações de seus estabelecimentos" ON configuracoes_estabelecimento FOR
+SELECT USING (
+        estabelecimento_id IN (
+            SELECT id
+            FROM estabelecimentos
+            WHERE
+                user_id = auth.uid ()
+        )
+    );
+
+CREATE POLICY "Usuários podem inserir configurações de seus estabelecimentos" ON configuracoes_estabelecimento FOR
+INSERT
+WITH
+    CHECK (
+        estabelecimento_id IN (
+            SELECT id
+            FROM estabelecimentos
+            WHERE
+                user_id = auth.uid ()
+        )
+    );
+
+CREATE POLICY "Usuários podem atualizar configurações de seus estabelecimentos" ON configuracoes_estabelecimento FOR
+UPDATE USING (
+    estabelecimento_id IN (
+        SELECT id
+        FROM estabelecimentos
+        WHERE
+            user_id = auth.uid ()
+    )
+);
+
+CREATE POLICY "Usuários podem deletar configurações de seus estabelecimentos" ON configuracoes_estabelecimento FOR DELETE USING (
+    estabelecimento_id IN (
+        SELECT id
+        FROM estabelecimentos
+        WHERE
+            user_id = auth.uid ()
+    )
+);
+
+-- Aplicar trigger de updated_at na tabela configurações
+CREATE TRIGGER update_configuracoes_estabelecimento_updated_at BEFORE UPDATE ON configuracoes_estabelecimento FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

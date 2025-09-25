@@ -2,15 +2,28 @@ import React, { useState, useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
-import { View, Text, Alert, ScrollView, TouchableOpacity } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
+import { getThemeClasses } from '../utils/theme';
+import {
+  View,
+  Text,
+  Alert,
+  ScrollView,
+  TouchableOpacity,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { Container } from '../components/Container';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { MultiSelectServicos } from '../components/MultiSelectServicos';
 import { DateTimePicker } from '../components/DateTimePicker';
+import { SelectColaborador } from '../components/SelectColaborador';
 import { supabase } from '../utils/supabase';
 import { useAuthStore } from '../store/authStore';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { formatPhoneNumber } from '../utils/phoneMask';
 
 interface FormData {
   nome: string;
@@ -54,36 +67,110 @@ const schema = yup
 export default function AgendamentoScreen() {
   const { estabelecimento } = useAuthStore();
   const navigation = useNavigation();
+  const route = useRoute();
   const [servicos, setServicos] = useState<Servico[]>([]);
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
   const [servicosSelecionados, setServicosSelecionados] = useState<number[]>([]);
   const [colaboradorSelecionado, setColaboradorSelecionado] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const { isDark } = useTheme();
+  const themeClasses = getThemeClasses(isDark);
+
+  // @ts-ignore - Parâmetros de navegação
+  const dadosParaEdicao = route.params?.dadosParaEdicao;
+  // @ts-ignore - Parâmetros de navegação
+  const dadosParaCopiar = route.params?.dadosParaCopiar;
+  const isEdicao = !!dadosParaEdicao?.isEdicao;
+
+  const getInitialValues = () => {
+    if (dadosParaEdicao) {
+      return {
+        nome: dadosParaEdicao.nome || '',
+        telefone: dadosParaEdicao.telefone || '',
+        email: dadosParaEdicao.email || '',
+        data: dadosParaEdicao.data ? new Date(dadosParaEdicao.data + 'T00:00:00') : null,
+        horario: dadosParaEdicao.horario
+          ? new Date(`2000-01-01T${dadosParaEdicao.horario.slice(0, 5)}:00`)
+          : null,
+        servicos: dadosParaEdicao.servico_id ? [dadosParaEdicao.servico_id] : [],
+        colaborador: dadosParaEdicao.colaborador_id || null,
+      };
+    }
+    if (dadosParaCopiar) {
+      return {
+        nome: dadosParaCopiar.nome || '',
+        telefone: dadosParaCopiar.telefone || '',
+        email: dadosParaCopiar.email || '',
+        data: null,
+        horario: null,
+        servicos: dadosParaCopiar.servico_id ? [dadosParaCopiar.servico_id] : [],
+        colaborador: dadosParaCopiar.colaborador_id || null,
+      };
+    }
+    return {
+      nome: '',
+      telefone: '',
+      email: '',
+      data: null,
+      horario: null,
+      servicos: [],
+      colaborador: null,
+    };
+  };
 
   const {
     control,
     handleSubmit,
     setValue,
     watch,
+    reset,
     formState: { errors },
   } = useForm<FormData>({
     resolver: yupResolver(schema) as any,
-    defaultValues: {
-      nome: '',
-      telefone: '',
-      data: null,
-      horario: null,
-      servicos: [],
-      colaborador: null,
-    },
+    defaultValues: getInitialValues(),
   });
-
-  const watchedData = watch('data');
-  const watchedHorario = watch('horario');
 
   useEffect(() => {
     buscarServicos();
     buscarColaboradores();
+
+    // Configurar valores iniciais para edição
+    if (dadosParaEdicao) {
+      // Reset form com valores de edição
+      const valoresEdicao = getInitialValues();
+      reset(valoresEdicao);
+
+      if (dadosParaEdicao.servico_id) {
+        setServicosSelecionados([dadosParaEdicao.servico_id]);
+      }
+      if (dadosParaEdicao.colaborador_id) {
+        setColaboradorSelecionado(dadosParaEdicao.colaborador_id);
+      }
+    }
+
+    // Configurar valores iniciais para cópia
+    if (dadosParaCopiar) {
+      if (dadosParaCopiar.servico_id) {
+        setServicosSelecionados([dadosParaCopiar.servico_id]);
+      }
+      if (dadosParaCopiar.colaborador_id) {
+        setColaboradorSelecionado(dadosParaCopiar.colaborador_id);
+      }
+    }
+
+    // Listeners do teclado
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (e) =>
+      setKeyboardHeight(e.endCoordinates.height)
+    );
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () =>
+      setKeyboardHeight(0)
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
   }, []);
 
   async function buscarServicos() {
@@ -93,7 +180,6 @@ export default function AgendamentoScreen() {
       .select('id, nome, descricao, favorito')
       .eq('estabelecimento_id', estabelecimento.id);
     if (data) {
-      // Favoritos primeiro
       setServicos([...data.filter((s) => s.favorito), ...data.filter((s) => !s.favorito)]);
     }
   }
@@ -108,7 +194,6 @@ export default function AgendamentoScreen() {
   }
 
   function colaboradoresPreferenciais(servicoId: number) {
-    // Colaboradores que têm preferência pelo serviço
     const preferenciais = colaboradores.filter((c) =>
       c.colaboradores_servicos?.some((cs: { servico_id: number }) => cs.servico_id === servicoId)
     );
@@ -119,13 +204,32 @@ export default function AgendamentoScreen() {
     return [...preferenciais, ...outros];
   }
 
-  async function verificarConflitoAgendamento(data: string, hora_inicio: string) {
-    // Verifica se já existe agendamento para data/horário
-    const { data: agendamentos } = await supabase
+  async function verificarConflitoAgendamento(
+    data: string,
+    hora_inicio: string,
+    colaborador_id: number | null,
+    agendamento_id_para_ignorar?: number
+  ) {
+    // Se não há colaborador selecionado, não verificar conflito
+    if (!colaborador_id) {
+      return false;
+    }
+
+    let query = supabase
       .from('agendamentos')
-      .select('id')
+      .select('id, status')
       .eq('data_agendamento', data)
-      .eq('hora_inicio', hora_inicio);
+      .eq('hora_inicio', hora_inicio)
+      .eq('colaborador_id', colaborador_id) // Só verifica conflito para o mesmo colaborador
+      .neq('status', 'cancelado'); // Excluir apenas agendamentos cancelados
+
+    // Se estiver editando, excluir o próprio agendamento da verificação
+    if (agendamento_id_para_ignorar) {
+      query = query.neq('id', agendamento_id_para_ignorar);
+    }
+
+    const { data: agendamentos } = await query;
+
     return agendamentos && agendamentos.length > 0;
   }
 
@@ -141,166 +245,219 @@ export default function AgendamentoScreen() {
     const dataFormatada = formData.data.toISOString().split('T')[0];
     const horarioFormatado = formData.horario.toTimeString().slice(0, 5);
 
-    const conflito = await verificarConflitoAgendamento(dataFormatada, horarioFormatado);
-    if (conflito) {
-      Alert.alert('Conflito', 'Já existe um agendamento para esta data e horário.');
-      setLoading(false);
-      return;
+    // Verificar conflito apenas se não for edição ou se houve mudanças na data/horário/colaborador
+    if (
+      !isEdicao ||
+      (dadosParaEdicao &&
+        (dataFormatada !== dadosParaEdicao.data ||
+          horarioFormatado !== dadosParaEdicao.horario ||
+          formData.colaborador !== dadosParaEdicao.colaborador_id))
+    ) {
+      const conflito = await verificarConflitoAgendamento(
+        dataFormatada,
+        horarioFormatado,
+        formData.colaborador,
+        isEdicao ? dadosParaEdicao?.id : undefined
+      );
+      if (conflito) {
+        Alert.alert(
+          'Conflito',
+          'Já existe um agendamento para este colaborador na mesma data e horário.'
+        );
+        setLoading(false);
+        return;
+      }
     }
 
-    // Calcular hora_fim (1 hora após hora_inicio por padrão)
     const horaFim = new Date(`2000-01-01T${horarioFormatado}:00`);
     horaFim.setHours(horaFim.getHours() + 1);
     const horaFimFormatada = horaFim.toTimeString().slice(0, 5);
 
-    // Salvar agendamento
-    const { error } = await supabase.from('agendamentos').insert({
+    const dadosParaSalvar: any = {
       cliente_nome: formData.nome,
       cliente_telefone: formData.telefone,
+      cliente_email: formData.email || null,
       data_agendamento: dataFormatada,
       hora_inicio: horarioFormatado,
       hora_fim: horaFimFormatada,
-      servico_id: formData.servicos[0] || null, // Primeiro serviço selecionado
+      servico_id: formData.servicos[0] || null,
       colaborador_id: formData.colaborador || null,
       estabelecimento_id: estabelecimento?.id,
-      status: 'agendado',
-    });
+    };
+
+    // Só adicionar status se for criação (não edição)
+    if (!isEdicao) {
+      dadosParaSalvar.status = 'agendado';
+    }
+
+    let error;
+    if (isEdicao && dadosParaEdicao?.id) {
+      // Atualizar agendamento existente
+      const { error: updateError } = await supabase
+        .from('agendamentos')
+        .update(dadosParaSalvar)
+        .eq('id', dadosParaEdicao.id);
+
+      error = updateError;
+    } else {
+      // Criar novo agendamento
+      const { error: insertError } = await supabase.from('agendamentos').insert(dadosParaSalvar);
+
+      error = insertError;
+    }
 
     setLoading(false);
     if (error) {
-      console.error('Erro ao criar agendamento:', error);
-      Alert.alert('Erro', 'Não foi possível criar o agendamento.');
+      console.error(`Erro ao ${isEdicao ? 'atualizar' : 'criar'} agendamento:`, error);
+      Alert.alert('Erro', `Não foi possível ${isEdicao ? 'atualizar' : 'criar'} o agendamento.`);
     } else {
-      Alert.alert('Sucesso', 'Agendamento criado com sucesso!', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      const mensagem = isEdicao
+        ? 'Agendamento atualizado com sucesso!'
+        : 'Agendamento criado com sucesso!';
+      Alert.alert('Sucesso', mensagem, [{ text: 'OK', onPress: () => navigation.goBack() }]);
     }
   };
 
   return (
-    <Container className="mb-10 mt-1 flex-1 bg-gray-50">
-      <View className="flex-row items-center px-6 pb-2 pt-4">
-        <Text className="ml-4 text-2xl font-bold text-gray-800">Novo Agendamento</Text>
-      </View>
+    <Container className="flex-1 bg-gray-50">
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView
+          contentContainerStyle={{
+            paddingHorizontal: 24,
+            paddingTop: 40,
+            paddingBottom: Math.max(keyboardHeight + 20, 100), // Padding dinâmico
+          }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
+          <View className="mb-6">
+            <Controller
+              control={control}
+              name="nome"
+              render={({ field: { onChange, value } }) => (
+                <Input
+                  label="Nome do cliente"
+                  value={value}
+                  onChangeText={onChange}
+                  error={errors.nome?.message}
+                  placeholder="Digite o nome completo"
+                />
+              )}
+            />
 
-      <ScrollView className="flex-1 px-6">
-        <View className="mb-6">
-          <Controller
-            control={control}
-            name="nome"
-            render={({ field: { onChange, value } }) => (
-              <Input
-                label="Nome do cliente"
-                value={value}
-                onChangeText={onChange}
-                error={errors.nome?.message}
-                placeholder="Digite o nome completo"
-              />
+            <Controller
+              control={control}
+              name="telefone"
+              render={({ field: { onChange, value } }) => (
+                <Input
+                  label="Telefone"
+                  value={value}
+                  onChangeText={(text) => {
+                    const formatted = formatPhoneNumber(text);
+                    onChange(formatted);
+                  }}
+                  error={errors.telefone?.message}
+                  keyboardType="phone-pad"
+                  placeholder="(11) 99999-9999"
+                />
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="email"
+              render={({ field: { onChange, value } }) => (
+                <Input
+                  label="Email (opcional)"
+                  value={value}
+                  onChangeText={onChange}
+                  error={errors.email?.message}
+                  keyboardType="email-address"
+                  placeholder="email@exemplo.com"
+                />
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="data"
+              render={({ field: { onChange, value } }) => (
+                <DateTimePicker
+                  label="Data do agendamento"
+                  value={value}
+                  onChange={(date) => {
+                    onChange(date);
+                    setValue('data', date);
+                  }}
+                  mode="date"
+                  error={errors.data?.message}
+                />
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="horario"
+              render={({ field: { onChange, value } }) => (
+                <DateTimePicker
+                  label="Horário do agendamento"
+                  value={value}
+                  onChange={(time) => {
+                    // Remove os segundos do horário selecionado
+                    const timeWithoutSeconds = new Date(time);
+                    timeWithoutSeconds.setSeconds(0, 0);
+                    onChange(timeWithoutSeconds);
+                    setValue('horario', timeWithoutSeconds);
+                  }}
+                  mode="time"
+                  error={errors.horario?.message}
+                />
+              )}
+            />
+
+            <Text className="mb-2 text-base font-medium text-gray-700">Serviços</Text>
+            <MultiSelectServicos
+              servicos={servicos}
+              servicosSelecionados={servicosSelecionados}
+              onServicosChange={(ids) => {
+                setServicosSelecionados(ids);
+                setValue('servicos', ids);
+              }}
+            />
+            {errors.servicos && (
+              <Text className="mt-1 text-sm text-red-500">{errors.servicos.message}</Text>
             )}
-          />
 
-          <Controller
-            control={control}
-            name="telefone"
-            render={({ field: { onChange, value } }) => (
-              <Input
-                label="Telefone"
-                value={value}
-                onChangeText={onChange}
-                error={errors.telefone?.message}
-                keyboardType="phone-pad"
-                placeholder="(11) 99999-9999"
-              />
-            )}
-          />
+            <Text className="mb-2 mt-4 text-base font-medium text-gray-700">Colaborador</Text>
+            <SelectColaborador
+              colaboradores={colaboradores}
+              colaboradorSelecionado={colaboradorSelecionado}
+              onColaboradorChange={(colaboradorId) => {
+                setColaboradorSelecionado(colaboradorId);
+                setValue('colaborador', colaboradorId);
+              }}
+              servicosSelecionados={servicosSelecionados}
+              placeholder="Selecione um colaborador (opcional)"
+            />
 
-          <Controller
-            control={control}
-            name="data"
-            render={({ field: { onChange, value } }) => (
-              <DateTimePicker
-                label="Data do agendamento"
-                value={value}
-                onChange={(date) => {
-                  onChange(date);
-                  setValue('data', date);
-                }}
-                mode="date"
-                error={errors.data?.message}
-              />
-            )}
-          />
-
-          <Controller
-            control={control}
-            name="horario"
-            render={({ field: { onChange, value } }) => (
-              <DateTimePicker
-                label="Horário do agendamento"
-                value={value}
-                onChange={(time) => {
-                  onChange(time);
-                  setValue('horario', time);
-                }}
-                mode="time"
-                error={errors.horario?.message}
-              />
-            )}
-          />
-
-          <Text className="mb-2 text-base font-medium text-gray-700">Serviços</Text>
-          <MultiSelectServicos
-            servicos={servicos}
-            servicosSelecionados={servicosSelecionados}
-            onServicosChange={(ids) => {
-              setServicosSelecionados(ids);
-              setValue('servicos', ids);
-            }}
-          />
-          {errors.servicos && (
-            <Text className="mt-1 text-sm text-red-500">{errors.servicos.message}</Text>
-          )}
-
-          {servicosSelecionados.length > 0 && (
-            <View className="mt-4">
-              <Text className="mb-2 text-base font-medium text-gray-700">
-                Colaborador (opcional)
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View className="flex-row">
-                  {colaboradoresPreferenciais(servicosSelecionados[0]).map((c) => (
-                    <TouchableOpacity
-                      key={c.id}
-                      className={`mr-2 rounded-lg border px-4 py-2 ${
-                        colaboradorSelecionado === c.id
-                          ? 'border-indigo-500 bg-indigo-50'
-                          : 'border-gray-300 bg-white'
-                      }`}
-                      onPress={() => {
-                        setColaboradorSelecionado(c.id);
-                        setValue('colaborador', c.id);
-                      }}>
-                      <Text
-                        className={`text-base ${
-                          colaboradorSelecionado === c.id ? 'text-indigo-700' : 'text-gray-800'
-                        }`}>
-                        {c.nome}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
-            </View>
-          )}
-
-          <Button
-            title={loading ? 'Criando agendamento...' : 'Criar Agendamento'}
-            onPress={handleSubmit(onSubmit)}
-            disabled={loading}
-            className="mb-6 mt-8"
-          />
-        </View>
-      </ScrollView>
+            <Button
+              title={
+                loading
+                  ? isEdicao
+                    ? 'Atualizando agendamento...'
+                    : 'Criando agendamento...'
+                  : isEdicao
+                    ? 'Atualizar Agendamento'
+                    : 'Criar Agendamento'
+              }
+              onPress={handleSubmit(onSubmit)}
+              disabled={loading}
+              className="mb-6 mt-8"
+            />
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </Container>
   );
 }

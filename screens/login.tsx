@@ -1,6 +1,6 @@
 // screens/login.tsx
 import { useForm, Controller } from 'react-hook-form';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as ImagePicker from 'expo-image-picker';
@@ -9,6 +9,7 @@ import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -19,10 +20,16 @@ import {
 import { Button } from '../components/Button';
 import { Container } from '../components/Container';
 import { Input } from '../components/Input';
+import { SelectRamoAtividade } from '../components/SelectRamoAtividade';
 import { supabase } from '../utils/supabase';
+import { formatPhoneNumber, unformatPhoneNumber } from '../utils/phoneMask';
+import { RamoAtividade } from '../data/ramosAtividade';
+import { servicoService } from '../utils/servicos';
 import * as FileSystem from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
 import { useNavigation, CommonActions } from '@react-navigation/native';
+import { useTheme } from '../contexts/ThemeContext';
+import { getThemeClasses } from '../utils/theme';
 
 // Types
 interface SignForm {
@@ -41,10 +48,15 @@ const ONBOARDING_KEY = '@onboarding_seen'; // flag do tutorial
 
 export default function LoginScreen() {
   const navigation = useNavigation<any>();
+  const { isDark } = useTheme();
+  const themeClasses = getThemeClasses(isDark);
 
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [logoFile, setLogoFile] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [ramoSelecionado, setRamoSelecionado] = useState<RamoAtividade | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const [isHardwareAvailable, setIsHardwareAvailable] = useState(false);
   const [bioEnabled, setBioEnabled] = useState(false);
@@ -77,6 +89,21 @@ export default function LoginScreen() {
     });
     return () => {
       sub.subscription?.unsubscribe();
+    };
+  }, []);
+
+  // Listeners nativos do teclado
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
     };
   }, []);
 
@@ -271,15 +298,19 @@ export default function LoginScreen() {
         }
 
         if (userId) {
-          const { error: insertError } = await supabase.from('estabelecimentos').insert({
-            user_id: userId,
-            nome: formData.nome,
-            email: formData.email,
-            telefone: formData.telefone,
-            endereco: formData.endereco,
-            ramo: formData.ramo,
-            logo: logoUrl,
-          });
+          const { data: estabelecimentoData, error: insertError } = await supabase
+            .from('estabelecimentos')
+            .insert({
+              user_id: userId,
+              nome: formData.nome,
+              email: formData.email,
+              telefone: formData.telefone,
+              endereco: formData.endereco,
+              ramo: formData.ramo,
+              logo: logoUrl,
+            })
+            .select()
+            .single();
 
           if (insertError) {
             console.error('Erro ao inserir estabelecimento:', insertError);
@@ -288,14 +319,36 @@ export default function LoginScreen() {
               'Usuário criado, mas houve erro ao salvar dados do estabelecimento. Você pode completar o cadastro depois no perfil.'
             );
           } else {
+            let servicosImportados = false;
+            if (ramoSelecionado && estabelecimentoData?.id) {
+              try {
+                const result = await servicoService.importarServicosDoRamo(
+                  ramoSelecionado.id,
+                  estabelecimentoData.id
+                );
+
+                if (result.success) {
+                  servicosImportados = true;
+                  console.log(
+                    `${result.count} serviços importados para o ramo ${ramoSelecionado.nomeRamoAtividade}`
+                  );
+                } else {
+                  console.error('Erro ao importar serviços:', result.error);
+                }
+              } catch (error) {
+                console.error('Erro ao importar serviços:', error);
+              }
+            }
+
             Alert.alert(
               'Sucesso',
-              'Conta criada! Verifique seu email para confirmar. Você será direcionado ao login.',
+              `Conta criada! Verifique seu email para confirmar.\nVocê será direcionado ao login.`,
               [
                 {
                   text: 'Ok',
                   onPress: () => {
                     setLogoFile(null);
+                    setRamoSelecionado(null);
                     reset({
                       email: '',
                       password: '',
@@ -365,19 +418,32 @@ export default function LoginScreen() {
   const onToggleMode = () => {
     setIsSignUp((prev) => !prev);
     setLogoFile(null);
+    setRamoSelecionado(null);
     reset({ email: '', password: '', nome: '', telefone: '', endereco: '', ramo: '' });
   };
   const handleResetTutorial = async () => {
     try {
       await AsyncStorage.removeItem(ONBOARDING_KEY);
 
-      const okReplace = navigation?.replace && (() => {
-        try { navigation.replace('Intro'); return true; } catch { return false; }
-      })();
+      const okReplace =
+        navigation?.replace &&
+        (() => {
+          try {
+            navigation.replace('Intro');
+            return true;
+          } catch {
+            return false;
+          }
+        })();
       if (okReplace) return;
 
       const okNavigate = (() => {
-        try { navigation.navigate('Intro'); return true; } catch { return false; }
+        try {
+          navigation.navigate('Intro');
+          return true;
+        } catch {
+          return false;
+        }
       })();
       if (okNavigate) return;
 
@@ -404,18 +470,25 @@ export default function LoginScreen() {
   };
 
   return (
-    <Container className="mb-10 mt-10 flex-1 bg-gray-100">
+    <Container className="flex-1 bg-gray-100">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 20}
         style={{ flex: 1 }}>
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
+          ref={scrollViewRef}
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingTop: Platform.OS === 'ios' ? 60 : 40,
+            paddingBottom: keyboardHeight > 0 ? 20 : 40,
+          }}
           keyboardShouldPersistTaps="handled"
-          className="flex-1">
-          <View className="m-6 flex-1 justify-center">
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={true}
+          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>
+          <View className={`mx-6 flex-1 ${!isSignUp ? 'justify-center' : ''}`}>
             <View className="mb-8 items-center">
-              <Text className="mb-2 text-3xl font-bold text-gray-900">
+              <Text className="mb-2 mt-8 text-3xl font-bold text-gray-900">
                 {isSignUp ? 'Criar Conta' : 'Entrar'}
               </Text>
               <Text className="text-center text-gray-600">
@@ -425,7 +498,7 @@ export default function LoginScreen() {
               </Text>
             </View>
 
-            <View className="space-y-4">
+            <View className="mb-6 space-y-4">
               {isSignUp && (
                 <>
                   <Controller
@@ -447,9 +520,12 @@ export default function LoginScreen() {
                     render={({ field: { onChange, value } }) => (
                       <Input
                         label="Telefone"
-                        value={value}
-                        onChangeText={onChange}
-                        placeholder="Telefone"
+                        value={formatPhoneNumber(value || '')}
+                        onChangeText={(text) => {
+                          const rawValue = unformatPhoneNumber(text);
+                          onChange(rawValue);
+                        }}
+                        placeholder="(11) 99999-9999"
                         keyboardType="phone-pad"
                         error={errors.telefone?.message}
                       />
@@ -468,24 +544,37 @@ export default function LoginScreen() {
                       />
                     )}
                   />
-                  <Controller
-                    control={control}
-                    name="ramo"
-                    render={({ field: { onChange, value } }) => (
-                      <Input
-                        label="Ramo de Atividade"
-                        value={value}
-                        onChangeText={onChange}
-                        placeholder="Ramo de atividade"
-                        error={errors.ramo?.message}
-                      />
+                  <View className="mb-4">
+                    <Text className="mb-2 text-base font-medium text-gray-700">
+                      Ramo de Atividade
+                    </Text>
+                    <Controller
+                      control={control}
+                      name="ramo"
+                      render={({ field: { onChange } }) => (
+                        <SelectRamoAtividade
+                          value={ramoSelecionado}
+                          onValueChange={(ramo) => {
+                            setRamoSelecionado(ramo);
+                            onChange(ramo?.nomeRamoAtividade || '');
+                          }}
+                          placeholder="Selecione um ramo de atividade"
+                        />
+                      )}
+                    />
+                    {errors.ramo && (
+                      <Text className="mt-1 text-sm text-red-500">{errors.ramo.message}</Text>
                     )}
-                  />
-                  <Text className="mb-2 text-base font-medium text-gray-700">Logotipo</Text>
+                  </View>
+                  <Text className={`mb-2 text-base font-medium ${themeClasses.textPrimary}`}>
+                    Logotipo
+                  </Text>
                   <TouchableOpacity
-                    className="mb-4 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-3"
+                    className={`mb-4 items-center justify-center rounded-lg border px-4 py-3 ${themeClasses.inputBackground} ${themeClasses.border}`}
                     onPress={handlePickLogo}>
-                    <Text>{logoFile?.fileName || 'Selecionar Logotipo '}</Text>
+                    <Text className={themeClasses.textSecondary}>
+                      {logoFile?.fileName || 'Selecionar Logotipo '}
+                    </Text>
                   </TouchableOpacity>
                 </>
               )}
@@ -562,8 +651,7 @@ export default function LoginScreen() {
                     borderColor: 'rgba(37, 99, 235, 0.4)',
                     backgroundColor: 'rgba(59, 130, 246, 0.08)',
                     marginBottom: 8,
-                  }}
-                >
+                  }}>
                   <Text style={{ color: '#3b82f6', fontWeight: '700' }}>Esqueci minha senha</Text>
                 </TouchableOpacity>
 
@@ -576,15 +664,21 @@ export default function LoginScreen() {
                     borderWidth: 1,
                     borderColor: 'rgba(37, 99, 235, 0.4)',
                     backgroundColor: 'rgba(59, 130, 246, 0.08)',
-                  }}
-                >
+                  }}>
                   <Text style={{ color: '#3b82f6', fontWeight: '700' }}>Rever tutorial</Text>
                 </TouchableOpacity>
               </View>
             )}
 
-            
-           
+            {/* Espaçamento extra para garantir que os campos não fiquem embaixo do teclado */}
+            {isSignUp && (
+              <View
+                style={{
+                  height: keyboardHeight > 0 ? 20 : 100,
+                  marginBottom: keyboardHeight > 0 ? 10 : 20,
+                }}
+              />
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -4,10 +4,14 @@ import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Container } from '../components/Container';
 import { useAuthStore } from '../store/authStore';
+import { useTheme } from '../contexts/ThemeContext';
+import { getThemeClasses } from '../utils/theme';
 
 export default function ConfiguracoesScreen() {
   const navigation = useNavigation();
   const { user, estabelecimento, signOut } = useAuthStore();
+  const { isDark } = useTheme();
+  const themeClasses = getThemeClasses(isDark);
 
   const displayLogo = useMemo(() => {
     if (estabelecimento?.logo) return estabelecimento.logo;
@@ -19,10 +23,10 @@ export default function ConfiguracoesScreen() {
     icon: React.ComponentProps<typeof Feather>['name'];
     route: string;
   }[] = [
-    { label: 'Ramo de Atividade', icon: 'briefcase', route: 'RamoAtividade' },
     { label: 'Serviços', icon: 'tool', route: 'Servicos' },
     { label: 'Colaboradores', icon: 'users', route: 'Colaboradores' },
-    { label: 'Agendamento', icon: 'calendar', route: 'Agendamento' },
+    { label: 'Clientes Atendidos', icon: 'user-check', route: 'Clientes' },
+    { label: 'Template de Mensagem', icon: 'message-square', route: 'TemplateMensagem' },
     { label: 'Ajustes', icon: 'settings', route: 'Ajustes' },
   ];
 
@@ -69,27 +73,33 @@ export default function ConfiguracoesScreen() {
   );
 
   return (
-    <Container className="bg-gray-50">
+    <Container className={themeClasses.background}>
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <HeaderCard />
 
-        <View className="mx-6 mb-6 overflow-hidden rounded-2xl bg-white shadow-sm">
+        <View
+          className={`mx-6 mb-6 overflow-hidden rounded-2xl shadow-sm ${themeClasses.cardBackground}`}>
           {options.map((item) => (
             <TouchableOpacity
               key={item.label}
-              className="flex-row items-center justify-between border-b border-gray-100 p-4"
+              className={`flex-row items-center justify-between border-b p-4 ${themeClasses.borderLight}`}
               onPress={() => navigation.navigate(item.route as never)}>
               <View className="flex-1 flex-row items-center">
-                <Feather name={item.icon} size={20} color="#4B5563" />
-                <Text className="ml-3 flex-1 text-base text-gray-900">{item.label}</Text>
+                <Feather name={item.icon} size={20} color={isDark ? '#94A3B8' : '#4B5563'} />
+                <Text className={`ml-3 flex-1 text-base ${themeClasses.textPrimary}`}>
+                  {item.label}
+                </Text>
               </View>
-              <Feather name="chevron-right" size={20} color="#D1D5DB" />
+              <Feather name="chevron-right" size={20} color={isDark ? '#64748B' : '#D1D5DB'} />
             </TouchableOpacity>
           ))}
 
           <TouchableOpacity className="flex-row items-center p-4" onPress={handleSignOut}>
-            <Feather name="log-out" size={20} />
-            <Text className="ml-3 text-base font-semibold">Sair</Text>
+            <Feather name="log-out" size={20} color={isDark ? '#EF4444' : '#DC2626'} />
+            <Text
+              className={`ml-3 text-base font-semibold ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+              Sair
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

@@ -23,6 +23,8 @@ import { Input } from '../components/Input';
 import { MultiSelectServicos } from '../components/MultiSelectServicos';
 import { supabase } from '../utils/supabase';
 import { useAuthStore } from '../store/authStore';
+import { useTheme } from '../contexts/ThemeContext';
+import { getThemeClasses } from '../utils/theme';
 
 interface Colaborador {
   id: number;
@@ -44,6 +46,8 @@ const schema = yup.object({
 export default function ColaboradoresScreen() {
   const navigation = useNavigation();
   const { estabelecimento } = useAuthStore();
+  const { isDark } = useTheme();
+  const themeClasses = getThemeClasses(isDark);
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
   const [servicos, setServicos] = useState<Servico[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
@@ -69,11 +73,11 @@ export default function ColaboradoresScreen() {
     navigation.setOptions({
       headerRight: () => (
         <TouchableOpacity onPress={() => abrirModal()} style={{ marginRight: 15 }}>
-          <Feather name="plus" size={24} color="#1f2937" />
+          <Feather name="plus" size={24} color={isDark ? '#D1D5DB' : '#1f2937'} />
         </TouchableOpacity>
       ),
     });
-  }, [navigation]);
+  }, [navigation, isDark]);
 
   useEffect(() => {
     buscarColaboradores();
@@ -265,21 +269,23 @@ export default function ColaboradoresScreen() {
   }
 
   return (
-    <Container className="mb-10 mt-1 flex-1 bg-gray-100">
+    <Container className="flex-1 bg-gray-100">
       <View className="m-6 flex-1">
         <FlatList
           data={colaboradores}
           keyExtractor={(item) => item.id.toString()}
           showsVerticalScrollIndicator={false}
-          // Removido flexGrow: 1 para evitar problemas de layout no iOS
           renderItem={({ item }) => (
-            <View className="mb-4 flex-row items-center rounded-lg border border-gray-200 bg-white p-4">
+            <View
+              className={`mb-4 flex-row items-center rounded-lg border p-4 ${themeClasses.cardBackground} ${themeClasses.border}`}>
               <View className="mr-4">
                 {item.foto_url ? (
                   <Image source={{ uri: item.foto_url }} className="h-12 w-12 rounded-full" />
                 ) : (
-                  <View className="h-12 w-12 items-center justify-center rounded-full bg-gray-300">
-                    <Text className="text-lg font-bold text-gray-600">
+                  <View
+                    className={`h-12 w-12 items-center justify-center rounded-full ${isDark ? 'bg-slate-600' : 'bg-gray-300'}`}>
+                    <Text
+                      className={`text-lg font-bold ${isDark ? 'text-slate-200' : 'text-gray-600'}`}>
                       {item.nome.charAt(0).toUpperCase()}
                     </Text>
                   </View>
@@ -287,8 +293,10 @@ export default function ColaboradoresScreen() {
               </View>
 
               <View className="flex-1">
-                <Text className="text-lg font-semibold text-gray-900">{item.nome}</Text>
-                <Text className="text-sm text-gray-600">
+                <Text className={`text-lg font-semibold ${themeClasses.textPrimary}`}>
+                  {item.nome}
+                </Text>
+                <Text className={`text-sm ${themeClasses.textSecondary}`}>
                   {item.servicos.length > 0
                     ? `Serviços: ${item.servicos
                         .map((id) => servicos.find((s) => s.id === id)?.nome)
@@ -314,7 +322,7 @@ export default function ColaboradoresScreen() {
           )}
           ListEmptyComponent={
             <View className="flex-1 items-center justify-center py-12">
-              <Text className="text-center text-gray-500">
+              <Text className={`text-center ${themeClasses.textMuted}`}>
                 Nenhum colaborador cadastrado ainda.{'\n'}
                 Adicione um novo colaborador para começar.
               </Text>
@@ -324,7 +332,7 @@ export default function ColaboradoresScreen() {
       </View>
 
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
-        <Container className="flex-1 bg-gray-100">
+        <Container className={`flex-1 ${themeClasses.background}`}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={{ flex: 1 }}>
@@ -334,10 +342,11 @@ export default function ColaboradoresScreen() {
               className="flex-1">
               <View className="m-6 flex-1">
                 <View className="mb-8 w-full items-center">
-                  <Text className="mb-2 w-full text-center text-3xl font-bold text-gray-900">
+                  <Text
+                    className={`mb-2 w-full text-center text-3xl font-bold ${themeClasses.textPrimary}`}>
                     {editingColaborador ? 'Editar Colaborador' : 'Novo Colaborador'}
                   </Text>
-                  <Text className="w-full text-center text-gray-600">
+                  <Text className={`w-full text-center ${themeClasses.textSecondary}`}>
                     {editingColaborador
                       ? 'Atualize os dados do colaborador'
                       : 'Adicione um novo colaborador'}
@@ -360,14 +369,15 @@ export default function ColaboradoresScreen() {
                   />
 
                   <View className="mb-4">
-                    <Text className="mb-2 text-base font-medium text-gray-700">
+                    <Text className={`mb-2 text-base font-medium ${themeClasses.textSecondary}`}>
                       Foto do Colaborador
                     </Text>
                     <TouchableOpacity
-                      className="mb-4 flex-row items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-3"
+                      className={`mb-4 flex-row items-center justify-center rounded-lg border px-4 py-3 ${themeClasses.border} ${themeClasses.inputBackground}`}
                       onPress={handlePickFoto}>
-                      <Feather name="camera" size={20} color="#4B5563" />
-                      <Text className="ml-2 text-center text-base font-medium text-gray-700">
+                      <Feather name="camera" size={20} color={isDark ? '#94A3B8' : '#4B5563'} />
+                      <Text
+                        className={`ml-2 text-center text-base font-medium ${themeClasses.textSecondary}`}>
                         {fotoFile?.fileName || 'Selecionar Foto'}
                       </Text>
                     </TouchableOpacity>

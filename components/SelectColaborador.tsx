@@ -4,61 +4,68 @@ import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { getThemeClasses } from '../utils/theme';
 
-interface Servico {
+interface Colaborador {
   id: number;
   nome: string;
-  descricao?: string;
-  favorito?: boolean;
+  colaboradores_servicos?: { servico_id: number }[];
 }
 
-interface MultiSelectServicosProps {
-  servicos: Servico[];
-  servicosSelecionados: number[];
-  onServicosChange: (servicosIds: number[]) => void;
+interface SelectColaboradorProps {
+  colaboradores: Colaborador[];
+  colaboradorSelecionado: number | null;
+  onColaboradorChange: (colaboradorId: number | null) => void;
+  servicosSelecionados?: number[];
   placeholder?: string;
   disabled?: boolean;
 }
 
-export function MultiSelectServicos({
-  servicos,
-  servicosSelecionados,
-  onServicosChange,
-  placeholder = 'Selecione os serviços',
+export function SelectColaborador({
+  colaboradores,
+  colaboradorSelecionado,
+  onColaboradorChange,
+  servicosSelecionados = [],
+  placeholder = 'Selecione um colaborador',
   disabled = false,
-}: MultiSelectServicosProps) {
+}: SelectColaboradorProps) {
   const [modalVisible, setModalVisible] = useState(false);
   const { isDark } = useTheme();
   const themeClasses = getThemeClasses(isDark);
 
-  const toggleServico = (servicoId: number) => {
-    const isSelected = servicosSelecionados.includes(servicoId);
-
-    if (isSelected) {
-      onServicosChange(servicosSelecionados.filter((id) => id !== servicoId));
-    } else {
-      onServicosChange([...servicosSelecionados, servicoId]);
+  const colaboradoresOrganizados = React.useMemo(() => {
+    if (servicosSelecionados.length === 0) {
+      return colaboradores;
     }
-  };
 
-  const selecionarTodos = () => {
-    onServicosChange(servicos.map((s) => s.id));
-  };
+    const preferenciais = colaboradores.filter((c) =>
+      c.colaboradores_servicos?.some((cs) => servicosSelecionados.includes(cs.servico_id))
+    );
 
-  const deselecionarTodos = () => {
-    onServicosChange([]);
+    const outros = colaboradores.filter(
+      (c) => !c.colaboradores_servicos?.some((cs) => servicosSelecionados.includes(cs.servico_id))
+    );
+
+    return [...preferenciais, ...outros];
+  }, [colaboradores, servicosSelecionados]);
+
+  const colaboradorSelecionadoObj = colaboradores.find((c) => c.id === colaboradorSelecionado);
+
+  const isPreferencial = (colaborador: Colaborador) => {
+    if (servicosSelecionados.length === 0) return false;
+    return colaborador.colaboradores_servicos?.some((cs) =>
+      servicosSelecionados.includes(cs.servico_id)
+    );
   };
 
   const getDisplayText = () => {
-    if (servicosSelecionados.length === 0) {
+    if (!colaboradorSelecionado) {
       return placeholder;
     }
 
-    if (servicosSelecionados.length === 1) {
-      const servico = servicos.find((s) => s.id === servicosSelecionados[0]);
-      return servico?.nome || '';
-    }
+    return colaboradorSelecionadoObj?.nome || '';
+  };
 
-    return `${servicosSelecionados.length} serviços selecionados`;
+  const limparSelecao = () => {
+    onColaboradorChange(null);
   };
 
   return (
@@ -73,7 +80,7 @@ export function MultiSelectServicos({
         disabled={disabled}>
         <Text
           className={`flex-1 ${
-            servicosSelecionados.length > 0
+            colaboradorSelecionado
               ? themeClasses.textPrimary
               : disabled
                 ? themeClasses.textMuted
@@ -83,8 +90,8 @@ export function MultiSelectServicos({
         </Text>
 
         <View className="flex-row items-center">
-          {servicosSelecionados.length > 0 && !disabled && (
-            <TouchableOpacity onPress={deselecionarTodos} className="mr-2">
+          {colaboradorSelecionado && !disabled && (
+            <TouchableOpacity onPress={limparSelecao} className="mr-2">
               <Feather name="x" size={18} color={isDark ? '#94A3B8' : '#6B7280'} />
             </TouchableOpacity>
           )}
@@ -104,7 +111,7 @@ export function MultiSelectServicos({
             <View
               className={`flex-row items-center justify-between border-b p-4 ${themeClasses.borderLight}`}>
               <Text className={`text-lg font-semibold ${themeClasses.textPrimary}`}>
-                Selecionar Serviços
+                Selecionar Colaborador
               </Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <Feather name="x" size={24} color={isDark ? '#94A3B8' : '#6B7280'} />
@@ -112,30 +119,38 @@ export function MultiSelectServicos({
             </View>
 
             <View className="p-4">
+              {servicosSelecionados.length > 0 && (
+                <View className="mb-4 rounded-lg bg-indigo-50 p-3">
+                  <Text className="text-sm text-indigo-700">
+                    💡 Colaboradores especialistas nos serviços selecionados aparecem primeiro
+                  </Text>
+                </View>
+              )}
+
               <View className="mb-4 flex-row items-center justify-between">
                 <Text className={`text-sm font-medium ${themeClasses.textSecondary}`}>
-                  Serviços disponíveis ({servicos.length}):
+                  Colaboradores disponíveis ({colaboradores.length}):
                 </Text>
-                <View className="flex-row space-x-2">
-                  <TouchableOpacity onPress={selecionarTodos}>
-                    <Text className="text-sm text-indigo-600">Todos</Text>
+                {colaboradorSelecionado && (
+                  <TouchableOpacity onPress={limparSelecao}>
+                    <Text className="text-sm text-indigo-600">Limpar seleção</Text>
                   </TouchableOpacity>
-                  <Text className={themeClasses.textMuted}>|</Text>
-                  <TouchableOpacity onPress={deselecionarTodos}>
-                    <Text className="text-sm text-indigo-600">Nenhum</Text>
-                  </TouchableOpacity>
-                </View>
+                )}
               </View>
 
               <FlatList
-                data={servicos}
+                data={colaboradoresOrganizados}
                 keyExtractor={(item) => item.id.toString()}
                 renderItem={({ item }) => {
-                  const isSelected = servicosSelecionados.includes(item.id);
+                  const isSelected = colaboradorSelecionado === item.id;
+                  const isPref = isPreferencial(item);
 
                   return (
                     <TouchableOpacity
-                      onPress={() => toggleServico(item.id)}
+                      onPress={() => {
+                        onColaboradorChange(item.id);
+                        setModalVisible(false);
+                      }}
                       className={`mb-3 rounded-lg border p-3 ${
                         isSelected
                           ? 'border-indigo-300 bg-indigo-50'
@@ -143,31 +158,24 @@ export function MultiSelectServicos({
                       }`}>
                       <View className="flex-row items-start">
                         <View
-                          className={`mr-3 h-5 w-5 items-center justify-center rounded border-2 ${
+                          className={`mr-3 h-5 w-5 items-center justify-center rounded-full border-2 ${
                             isSelected ? 'border-indigo-500 bg-indigo-500' : 'border-gray-300'
                           }`}>
                           {isSelected && <Feather name="check" size={12} color="white" />}
                         </View>
                         <View className="flex-1">
-                          <View className="flex-row items-center">
-                            <Text
-                              className={`font-medium ${
-                                isSelected ? 'text-indigo-900' : themeClasses.textPrimary
-                              }`}>
-                              {item.nome}
-                            </Text>
-                            {item.favorito && (
-                              <View className="ml-2">
-                                <Feather name="star" size={14} color="#fbbf24" />
-                              </View>
-                            )}
-                          </View>
-                          {item.descricao && (
+                          <Text
+                            className={`font-medium ${
+                              isSelected ? 'text-indigo-900' : themeClasses.textPrimary
+                            }`}>
+                            {item.nome}
+                          </Text>
+                          {isPref && (
                             <Text
                               className={`mt-1 text-sm ${
                                 isSelected ? 'text-indigo-600' : themeClasses.textSecondary
                               }`}>
-                              {item.descricao}
+                              ⭐ Especialista nos serviços selecionados
                             </Text>
                           )}
                         </View>
@@ -179,10 +187,10 @@ export function MultiSelectServicos({
                 style={{ maxHeight: 400 }}
               />
 
-              {servicos.length === 0 && (
+              {colaboradores.length === 0 && (
                 <View className="items-center py-8">
                   <Text className={`text-center ${themeClasses.textMuted}`}>
-                    Nenhum serviço disponível
+                    Nenhum colaborador disponível
                   </Text>
                 </View>
               )}
@@ -191,7 +199,9 @@ export function MultiSelectServicos({
             <View className={`border-t p-4 ${themeClasses.borderLight}`}>
               <View className="flex-row items-center justify-between">
                 <Text className={`text-sm ${themeClasses.textSecondary}`}>
-                  {servicosSelecionados.length} serviço(s) selecionado(s)
+                  {colaboradorSelecionado
+                    ? '1 colaborador selecionado'
+                    : 'Nenhum colaborador selecionado'}
                 </Text>
                 <TouchableOpacity
                   onPress={() => setModalVisible(false)}
